@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="chessboard"></div>
+
+    <div id="promotion-modal" class="modal hidden">
+        <div class="modal-content">
+            <p>গুটি কী বানাবে?</p>
+            <div class="promo-options">
+                <button data-piece="queen">♕</button>
+                <button data-piece="rook">♖</button>
+                <button data-piece="bishop">♗</button>
+                <button data-piece="knight">♘</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameover-overlay" class="overlay hidden">
+        <div class="gameover-box">
+            <div class="gameover-text"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="chess.js"></script>
+</body>
+</html>
