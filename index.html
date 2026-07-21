@@ -3,12 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Game</title>
+    <title>Online Chess</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="chessboard"></div>
+    <div id="lobby">
+        <h2>Online Chess</h2>
+        <button id="create-room-btn">নতুন রুম বানাও</button>
+
+        <div class="join-row">
+            <input id="room-code-input" placeholder="রুম কোড দাও" maxlength="6">
+            <button id="join-room-btn">রুমে জয়েন করো</button>
+        </div>
+
+        <p id="lobby-message"></p>
+    </div>
+
+    <div id="game-wrapper" class="hidden">
+        <div id="room-info">
+            রুম কোড: <span id="room-code-display"></span> |
+            তুমি: <span id="my-color-display"></span> |
+            <span id="turn-display"></span>
+        </div>
+        <div id="chessboard"></div>
+    </div>
 
     <div id="promotion-modal" class="modal hidden">
         <div class="modal-content">
@@ -27,6 +46,11 @@
             <div class="gameover-text"></div>
         </div>
     </div>
+
+    <!-- Firebase SDK (নিজের project config firebase-config.js এ বসাও) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
 
     <script src="script.js"></script>
     <script src="chess.js"></script>
