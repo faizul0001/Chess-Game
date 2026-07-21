@@ -1,27 +1,15 @@
 const squares = document.querySelectorAll(".square");
 
-const boardState = [
-    ["♜","♞","♝","♛","♚","♝","♞","♜"],
-    ["♟","♟","♟","♟","♟","♟","♟","♟"],
-    ["","","","","","","",""],
-    ["","","","","","","",""],
-    ["","","","","","","",""],
-    ["","","","","","","",""],
-    ["♙","♙","♙","♙","♙","♙","♙","♙"],
-    ["♖","♘","♗","♕","♔","♗","♘","♖"]
+const INITIAL_BOARD = [
+    "♜","♞","♝","♛","♚","♝","♞","♜",
+    "♟","♟","♟","♟","♟","♟","♟","♟",
+    "","","","","","","","",
+    "","","","","","","","",
+    "","","","","","","","",
+    "","","","","","","","",
+    "♙","♙","♙","♙","♙","♙","♙","♙",
+    "♖","♘","♗","♕","♔","♗","♘","♖"
 ];
-
-function drawBoard() {
-    let index = 0;
-    for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
-            squares[index].textContent = boardState[row][col];
-            index++;
-        }
-    }
-}
-
-drawBoard();
 
 let selected = null;
 let possibleMoves = [];
@@ -30,10 +18,21 @@ let gameOver = false;
 let awaitingPromotion = false;
 let pendingPromotion = null;
 
+let roomCode = null;
+let myColor = null;
+let localBoardCache = INITIAL_BOARD.slice();
+
 const promoModal = document.getElementById("promotion-modal");
 const promoButtons = promoModal.querySelectorAll("button");
 const gameoverOverlay = document.getElementById("gameover-overlay");
 const gameoverText = gameoverOverlay.querySelector(".gameover-text");
+
+const lobby = document.getElementById("lobby");
+const gameWrapper = document.getElementById("game-wrapper");
+const lobbyMessageEl = document.getElementById("lobby-message");
+const roomCodeDisplay = document.getElementById("room-code-display");
+const myColorDisplay = document.getElementById("my-color-display");
+const turnDisplay = document.getElementById("turn-display");
 
 const BLACK_PIECES = "♟♜♞♝♛♚";
 const WHITE_PIECES = "♙♖♘♗♕♔";
@@ -46,9 +45,7 @@ function pieceColor(ch) {
     return null;
 }
 
-function getBoardSnapshot() {
-    return Array.from(squares).map(sq => sq.textContent);
-}
+/* ---------- Pure move / check logic (no DOM, works on a plain board array) ---------- */
 
 function slideMoves(index, board, isEnemy, moves, directions) {
     const row = Math.floor(index / 8), col = index % 8;
@@ -202,34 +199,6 @@ function getAllLegalMoves(board, color) {
     return all;
 }
 
-function updateCheckHighlight() {
-    document.querySelectorAll(".square").forEach(sq => sq.classList.remove("in-check"));
-    const board = getBoardSnapshot();
-    if (isKingInCheck(board, turn)) {
-        const kIndex = findKing(board, turn);
-        if (kIndex !== -1) squares[kIndex].classList.add("in-check");
-    }
-}
-
-function checkGameEnd() {
-    const board = getBoardSnapshot();
-    const legal = getAllLegalMoves(board, turn);
-    if (legal.length === 0) {
-        gameOver = true;
-        if (isKingInCheck(board, turn)) {
-            const winner = turn === "white" ? "Black" : "White";
-            showGameOver("Checkmate! " + winner + " Wins");
-        } else {
-            showGameOver("Stalemate! Draw");
-        }
-    }
-}
-
-function showGameOver(text) {
-    gameoverText.textContent = text;
-    gameoverOverlay.classList.remove("hidden");
-}
-
 function isPromotionMove(piece, targetIndex) {
     const row = Math.floor(targetIndex / 8);
     if (piece === "♙" && row === 0) return true;
@@ -237,41 +206,7 @@ function isPromotionMove(piece, targetIndex) {
     return false;
 }
 
-function openPromotionModal(index, color) {
-    awaitingPromotion = true;
-    pendingPromotion = { index, color };
-
-    const pieceMap = color === "white"
-        ? { queen: "♕", rook: "♖", bishop: "♗", knight: "♘" }
-        : { queen: "♛", rook: "♜", bishop: "♝", knight: "♞" };
-
-    promoButtons.forEach(btn => {
-        btn.textContent = pieceMap[btn.dataset.piece];
-    });
-
-    promoModal.classList.remove("hidden");
-}
-
-promoButtons.forEach(btn => {
-    btn.addEventListener("click", () => {
-        if (!pendingPromotion) return;
-
-        const { index, color } = pendingPromotion;
-        const pieceMap = color === "white"
-            ? { queen: "♕", rook: "♖", bishop: "♗", knight: "♘" }
-            : { queen: "♛", rook: "♜", bishop: "♝", knight: "♞" };
-
-        squares[index].textContent = pieceMap[btn.dataset.piece];
-
-        promoModal.classList.add("hidden");
-        pendingPromotion = null;
-        awaitingPromotion = false;
-
-        turn = turn === "white" ? "black" : "white";
-        updateCheckHighlight();
-        checkGameEnd();
-    });
-});
+/* ---------- Rendering ---------- */
 
 function clearDots() {
     document.querySelectorAll(".move-dot").forEach(dot => dot.remove());
@@ -287,43 +222,224 @@ function showDot(index) {
 
 function showMoves(piece, index) {
     clearDots();
-    const board = getBoardSnapshot();
-    const legal = getLegalMoves(piece, index, board);
+    const legal = getLegalMoves(piece, index, localBoardCache);
     legal.forEach(m => showDot(m));
 }
 
+function renderBoard(board) {
+    for (let i = 0; i < 64; i++) {
+        squares[i].textContent = board[i];
+    }
+}
+
+function applyCheckHighlight(board, currentTurn) {
+    squares.forEach(sq => sq.classList.remove("in-check"));
+    if (isKingInCheck(board, currentTurn)) {
+        const kIndex = findKing(board, currentTurn);
+        if (kIndex !== -1) squares[kIndex].classList.add("in-check");
+    }
+}
+
+function updateRoomInfoUI() {
+    roomCodeDisplay.textContent = roomCode || "";
+    myColorDisplay.textContent = myColor === "white" ? "সাদা" : "কালো";
+    turnDisplay.textContent = turn === "white" ? "সাদার পালা" : "কালোর পালা";
+}
+
+/* ---------- Multiplayer sync (Firebase Realtime Database) ---------- */
+
+function generateRoomCode() {
+    return Math.random().toString(36).substring(2, 7).toUpperCase();
+}
+
+function lobbyMessage(msg) {
+    lobbyMessageEl.textContent = msg;
+}
+
+function showGameScreen() {
+    lobby.classList.add("hidden");
+    gameWrapper.classList.remove("hidden");
+}
+
+function startListening() {
+    db.ref("rooms/" + roomCode).on("value", (snap) => {
+        const data = snap.val();
+        if (!data || !data.board) return;
+
+        localBoardCache = data.board.slice();
+        turn = data.turn;
+        gameOver = !!data.gameOver;
+        selected = null;
+        clearDots();
+        squares.forEach(sq => {
+            sq.classList.remove("selected-white");
+            sq.classList.remove("selected-black");
+        });
+
+        renderBoard(localBoardCache);
+        applyCheckHighlight(localBoardCache, turn);
+        updateRoomInfoUI();
+
+        if (gameOver) {
+            gameoverText.textContent = data.gameOverText || "";
+            gameoverOverlay.classList.remove("hidden");
+        } else {
+            gameoverOverlay.classList.add("hidden");
+        }
+    });
+}
+
+function createRoom() {
+    roomCode = generateRoomCode();
+    myColor = "white";
+
+    db.ref("rooms/" + roomCode).set({
+        board: INITIAL_BOARD,
+        turn: "white",
+        gameOver: false,
+        gameOverText: "",
+        seats: { white: true, black: false }
+    }).then(() => {
+        startListening();
+        showGameScreen();
+    }).catch((err) => {
+        lobbyMessage("রুম বানাতে সমস্যা হয়েছে: " + err.message);
+    });
+}
+
+function joinRoom(code) {
+    const ref = db.ref("rooms/" + code);
+    ref.once("value").then((snap) => {
+        if (!snap.exists()) {
+            lobbyMessage("এই কোডের কোনো রুম পাওয়া যায়নি।");
+            return;
+        }
+        const data = snap.val();
+        if (data.seats && data.seats.black) {
+            lobbyMessage("এই রুম আগে থেকেই পূর্ণ।");
+            return;
+        }
+        roomCode = code;
+        myColor = "black";
+        ref.update({ "seats/black": true }).then(() => {
+            startListening();
+            showGameScreen();
+        });
+    }).catch((err) => {
+        lobbyMessage("জয়েন করতে সমস্যা হয়েছে: " + err.message);
+    });
+}
+
+function pushBoardUpdate(board) {
+    const newTurn = turn === "white" ? "black" : "white";
+    const legal = getAllLegalMoves(board, newTurn);
+
+    let newGameOver = false;
+    let newGameOverText = "";
+
+    if (legal.length === 0) {
+        newGameOver = true;
+        if (isKingInCheck(board, newTurn)) {
+            const winner = newTurn === "white" ? "Black" : "White";
+            newGameOverText = "Checkmate! " + winner + " Wins";
+        } else {
+            newGameOverText = "Stalemate! Draw";
+        }
+    }
+
+    db.ref("rooms/" + roomCode).update({
+        board: board,
+        turn: newTurn,
+        gameOver: newGameOver,
+        gameOverText: newGameOverText
+    });
+}
+
+function makeMove(fromIndex, toIndex) {
+    const board = localBoardCache.slice();
+    const movingPiece = board[fromIndex];
+
+    board[toIndex] = movingPiece;
+    board[fromIndex] = "";
+
+    if (isPromotionMove(movingPiece, toIndex)) {
+        pendingPromotion = { board, index: toIndex, color: pieceColor(movingPiece) };
+        awaitingPromotion = true;
+
+        renderBoard(board);
+
+        const color = pieceColor(movingPiece);
+        const pieceMap = color === "white"
+            ? { queen: "♕", rook: "♖", bishop: "♗", knight: "♘" }
+            : { queen: "♛", rook: "♜", bishop: "♝", knight: "♞" };
+        promoButtons.forEach(btn => {
+            btn.textContent = pieceMap[btn.dataset.piece];
+        });
+        promoModal.classList.remove("hidden");
+        return;
+    }
+
+    pushBoardUpdate(board);
+}
+
+promoButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+        if (!pendingPromotion) return;
+
+        const { board, index, color } = pendingPromotion;
+        const pieceMap = color === "white"
+            ? { queen: "♕", rook: "♖", bishop: "♗", knight: "♘" }
+            : { queen: "♛", rook: "♜", bishop: "♝", knight: "♞" };
+
+        board[index] = pieceMap[btn.dataset.piece];
+
+        promoModal.classList.add("hidden");
+        pendingPromotion = null;
+        awaitingPromotion = false;
+
+        pushBoardUpdate(board);
+    });
+});
+
+/* ---------- Lobby buttons ---------- */
+
+document.getElementById("create-room-btn").addEventListener("click", createRoom);
+
+document.getElementById("join-room-btn").addEventListener("click", () => {
+    const code = document.getElementById("room-code-input").value.trim().toUpperCase();
+    if (!code) {
+        lobbyMessage("রুম কোড লেখো।");
+        return;
+    }
+    joinRoom(code);
+});
+
+/* ---------- Board clicks ---------- */
+
 squares.forEach((square, index) => {
     square.addEventListener("click", () => {
-        if (gameOver || awaitingPromotion) return;
+        if (!roomCode || gameOver || awaitingPromotion) return;
+        if (turn !== myColor) return;
+
+        const board = localBoardCache;
 
         if (selected === null) {
-            if (square.textContent === "") return;
-            if (pieceColor(square.textContent) !== turn) return;
+            if (board[index] === "") return;
+            if (pieceColor(board[index]) !== myColor) return;
 
             selected = index;
-            square.classList.add(turn === "white" ? "selected-white" : "selected-black");
-            showMoves(square.textContent, index);
+            square.classList.add(myColor === "white" ? "selected-white" : "selected-black");
+            showMoves(board[index], index);
             return;
         }
 
         if (possibleMoves.includes(index)) {
-            const movingPiece = squares[selected].textContent;
-
-            squares[index].textContent = movingPiece;
-            squares[selected].textContent = "";
+            const fromIndex = selected;
             squares[selected].classList.remove("selected-white");
             squares[selected].classList.remove("selected-black");
             clearDots();
             selected = null;
-
-            if (isPromotionMove(movingPiece, index)) {
-                openPromotionModal(index, pieceColor(movingPiece));
-                return;
-            }
-
-            turn = turn === "white" ? "black" : "white";
-            updateCheckHighlight();
-            checkGameEnd();
+            makeMove(fromIndex, index);
             return;
         }
 
@@ -336,10 +452,10 @@ squares.forEach((square, index) => {
             return;
         }
 
-        if (square.textContent !== "" && pieceColor(square.textContent) === turn) {
+        if (board[index] !== "" && pieceColor(board[index]) === myColor) {
             selected = index;
-            square.classList.add(turn === "white" ? "selected-white" : "selected-black");
-            showMoves(square.textContent, index);
+            square.classList.add(myColor === "white" ? "selected-white" : "selected-black");
+            showMoves(board[index], index);
         } else {
             selected = null;
         }
