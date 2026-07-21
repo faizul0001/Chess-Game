@@ -5,12 +5,14 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    min-height: 100dvh;
+    width: 100%;
     background: #222;
     font-family: sans-serif;
-    padding: 12px;
+    padding: 8px;
     box-sizing: border-box;
+    overflow-x: hidden;
 }
-
 .hidden {
     display: none !important;
 }
@@ -92,8 +94,12 @@ body {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
-    width: min(560px, 94vw);
+
+    /* Desktop */
+    width: min(560px, calc(100vw - 16px));
+
     aspect-ratio: 1 / 1;
+
     border: 4px solid white;
     box-sizing: border-box;
 }
@@ -282,4 +288,20 @@ body {
 @keyframes gameoverGlow {
     0% { text-shadow: 0 0 15px orange, 0 0 25px red; }
     100% { text-shadow: 0 0 30px gold, 0 0 60px red; }
+}
+@media (max-width: 600px) {
+
+    body {
+        padding: 4px;
+    }
+
+    #chessboard {
+        width: calc(100vw - 8px);
+        max-width: 560px;
+        border-width: 3px;
+    }
+
+    .square {
+        font-size: min(11vw, 55px);
+    }
 }
